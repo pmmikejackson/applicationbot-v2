@@ -1,16 +1,24 @@
-import nodemailer from 'nodemailer'
+import * as nodemailer from 'nodemailer'
 import { prisma } from '@/lib/prisma'
 import crypto from 'crypto'
 
-const transporter = nodemailer.createTransporter({
-  host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: false,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASSWORD
+// Create transporter lazily to avoid build-time errors
+let transporter: nodemailer.Transporter | null = null
+
+function getTransporter() {
+  if (!transporter) {
+    transporter = nodemailer.createTransporter({
+      host: process.env.SMTP_HOST,
+      port: parseInt(process.env.SMTP_PORT || '587'),
+      secure: false,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASSWORD
+      }
+    })
   }
-})
+  return transporter
+}
 
 export async function sendVerificationEmail(email: string, userId: string) {
   // Generate verification token
@@ -57,7 +65,7 @@ export async function sendVerificationEmail(email: string, userId: string) {
   }
 
   try {
-    await transporter.sendMail(mailOptions)
+    await getTransporter().sendMail(mailOptions)
     console.log('Verification email sent to:', email)
   } catch (error) {
     console.error('Error sending verification email:', error)
