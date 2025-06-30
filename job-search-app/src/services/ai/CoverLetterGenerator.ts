@@ -1,8 +1,18 @@
 import OpenAI from 'openai'
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-})
+// Initialize OpenAI client lazily to avoid build-time errors
+let openai: OpenAI | null = null
+
+function getOpenAIClient(): OpenAI {
+  if (!openai) {
+    const apiKey = process.env.OPENAI_API_KEY
+    if (!apiKey) {
+      throw new Error('OPENAI_API_KEY is not configured')
+    }
+    openai = new OpenAI({ apiKey })
+  }
+  return openai
+}
 
 export interface CoverLetterRequest {
   jobTitle: string
@@ -47,7 +57,7 @@ Format the response as clean text without any markdown formatting.
 `
 
     try {
-      const completion = await openai.chat.completions.create({
+      const completion = await getOpenAIClient().chat.completions.create({
         model: 'gpt-3.5-turbo',
         messages: [
           {
@@ -99,7 +109,7 @@ Format your response as JSON with the following structure:
 `
 
     try {
-      const completion = await openai.chat.completions.create({
+      const completion = await getOpenAIClient().chat.completions.create({
         model: 'gpt-3.5-turbo',
         messages: [
           {
@@ -157,7 +167,7 @@ Return only a JSON array of 10-15 keywords, like: ["keyword1", "keyword2", ...]
 `
 
     try {
-      const completion = await openai.chat.completions.create({
+      const completion = await getOpenAIClient().chat.completions.create({
         model: 'gpt-3.5-turbo',
         messages: [
           {
