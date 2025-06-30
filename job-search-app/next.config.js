@@ -1,8 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    appDir: true,
-  },
   typescript: {
     ignoreBuildErrors: true, // Allow build despite type errors for demo
   },
