@@ -1,0 +1,257 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  password          String
+  firstName         String?
+  lastName          String?
+  emailVerified     DateTime?
+  twoFactorEnabled  Boolean  @default(false)
+  twoFactorSecret   String?
+  profileImage      String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Subscription & Billing
+  subscriptionStatus String   @default("trial") // trial, free, premium, cancelled
+  trialStartDate     DateTime @default(now())
+  trialEndDate       DateTime?
+  subscriptionId     String?
+  customerId         String?
+  
+  // Email Configuration
+  emailConfigs       EmailConfig[]
+  
+  // Job Search Data
+  jobs               Job[]
+  applications       Application[]
+  documents          Document[]
+  
+  // Collaboration
+  collaboratorInvites CollaboratorInvite[]
+  collaborations     Collaboration[]
+  
+  // Settings
+  retentionMonths    Int      @default(6)
+  
+  @@map("users")
+}
+
+model EmailConfig {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  emailAddress  String
+  provider      String   // gmail, outlook, icloud, other
+  imapHost      String
+  imapPort      Int
+  username      String
+  password      String   // encrypted
+  
+  // Filter settings
+  senderFilters String[] // Array of sender email addresses to monitor
+  subjectFilters String[] // Array of subject line patterns
+  
+  isActive      Boolean  @default(true)
+  lastSyncAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@map("email_configs")
+}
+
+model Job {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Job Details
+  title           String
+  company         String
+  location        String?
+  salaryMin       Int?
+  salaryMax       Int?
+  salaryRange     String?
+  description     String?
+  requirements    String?
+  url             String?
+  platform        String   // linkedin, indeed, builtin, ziprecruiter, etc.
+  
+  // Application Status
+  status          String   @default("available") // available, applied
+  
+  // Metadata
+  postedDate      DateTime?
+  applicationDeadline DateTime?
+  isExpired       Boolean  @default(false)
+  isDuplicate     Boolean  @default(false)
+  duplicateOfId   String?
+  
+  // Email source
+  emailSource     String?  // ID of the email this job was parsed from
+  parsedAt        DateTime?
+  
+  // Manual entry
+  isManualEntry   Boolean  @default(false)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relations
+  application     Application?
+  documents       Document[]
+  
+  @@map("jobs")
+}
+
+model Application {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId           String   @unique
+  job             Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  
+  // Application Status
+  status          String   @default("applied") // applied, phone_screen, interview, rejected, declined, offer, accepted, position_closed
+  interviewCount  Int      @default(0)
+  
+  // Important Dates
+  appliedAt       DateTime @default(now())
+  phoneScreenAt   DateTime?
+  firstInterviewAt DateTime?
+  lastInterviewAt DateTime?
+  rejectedAt      DateTime?
+  offerReceivedAt DateTime?
+  acceptedAt      DateTime?
+  
+  // Notes
+  notes           String?
+  
+  // Status History
+  statusHistory   ApplicationStatusHistory[]
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@map("applications")
+}
+
+model ApplicationStatusHistory {
+  id            String      @id @default(cuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  
+  fromStatus    String?
+  toStatus      String
+  changedAt     DateTime    @default(now())
+  notes         String?
+  
+  @@map("application_status_history")
+}
+
+model Document {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId        String
+  job          Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  
+  type         String   // cover_letter, cv, resume
+  title        String
+  content      String   // Generated content
+  format       String   @default("markdown") // markdown, html, pdf
+  version      Int      @default(1)
+  
+  // AI Generation metadata
+  prompt       String?
+  aiModel      String?
+  generatedAt  DateTime?
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  @@map("documents")
+}
+
+model CollaboratorInvite {
+  id           String   @id @default(cuid())
+  userId       String   // User who sent the invite
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  email        String
+  role         String   @default("viewer") // viewer, editor
+  token        String   @unique
+  expiresAt    DateTime
+  acceptedAt   DateTime?
+  
+  createdAt    DateTime @default(now())
+  
+  @@map("collaborator_invites")
+}
+
+model Collaboration {
+  id           String   @id @default(cuid())
+  userId       String   // Job search owner
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  collaboratorEmail String
+  role         String   @default("viewer") // viewer, editor
+  acceptedAt   DateTime @default(now())
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  @@unique([userId, collaboratorEmail])
+  @@map("collaborations")
+}
+
+model CalendarIntegration {
+  id           String   @id @default(cuid())
+  userId       String
+  
+  provider     String   // google, outlook, apple
+  accessToken  String
+  refreshToken String?
+  expiresAt    DateTime?
+  
+  calendarId   String?
+  isActive     Boolean  @default(true)
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  @@map("calendar_integrations")
+}
+
+model InterviewEvent {
+  id            String   @id @default(cuid())
+  applicationId String
+  
+  title         String
+  startTime     DateTime
+  endTime       DateTime
+  location      String?
+  notes         String?
+  
+  // Calendar sync
+  calendarEventId String?
+  calendarProvider String?
+  syncedAt      DateTime?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@map("interview_events")
+}
