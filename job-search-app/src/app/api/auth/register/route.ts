@@ -54,13 +54,33 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    // Send verification email
-    await sendVerificationEmail(user.email, user.id)
-
-    return NextResponse.json(
-      { message: 'User created successfully. Please check your email for verification.' },
-      { status: 201 }
-    )
+    // Send verification email (only if email service is configured)
+    try {
+      if (process.env.SMTP_HOST) {
+        await sendVerificationEmail(user.email, user.id)
+        return NextResponse.json(
+          { message: 'User created successfully. Please check your email for verification.' },
+          { status: 201 }
+        )
+      } else {
+        // If no email service is configured, mark user as verified
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { emailVerified: new Date() }
+        })
+        return NextResponse.json(
+          { message: 'User created successfully. You can now sign in.' },
+          { status: 201 }
+        )
+      }
+    } catch (emailError) {
+      console.error('Failed to send verification email:', emailError)
+      // User is created, but email failed - let them know
+      return NextResponse.json(
+        { message: 'User created successfully, but email verification failed. You can try signing in.' },
+        { status: 201 }
+      )
+    }
   } catch (error) {
     console.error('Registration error:', error)
     return NextResponse.json(
