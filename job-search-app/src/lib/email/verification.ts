@@ -1,13 +1,18 @@
-import * as nodemailer from 'nodemailer'
 import { prisma } from '@/lib/prisma'
 import crypto from 'crypto'
 
 // Create transporter lazily to avoid build-time errors
-let transporter: nodemailer.Transporter | null = null
+let transporter: any | null = null
 
-function getTransporter() {
+async function getTransporter() {
   if (!transporter) {
-    transporter = nodemailer.createTransporter({
+    // Check if we're in a build environment (no SMTP config)
+    if (!process.env.SMTP_HOST && process.env.NODE_ENV !== 'development') {
+      throw new Error('Email service not configured')
+    }
+    
+    const nodemailer = await import('nodemailer')
+    transporter = nodemailer.default.createTransporter({
       host: process.env.SMTP_HOST,
       port: parseInt(process.env.SMTP_PORT || '587'),
       secure: false,
@@ -65,7 +70,8 @@ export async function sendVerificationEmail(email: string, userId: string) {
   }
 
   try {
-    await getTransporter().sendMail(mailOptions)
+    const emailTransporter = await getTransporter()
+    await emailTransporter.sendMail(mailOptions)
     console.log('Verification email sent to:', email)
   } catch (error) {
     console.error('Error sending verification email:', error)
